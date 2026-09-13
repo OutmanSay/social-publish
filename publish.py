@@ -105,21 +105,49 @@ def retryable_composer_failure(output: str) -> bool:
 
 
 def twitter_command(command: list[str]) -> tuple[int, str]:
-    returncode, output = run(command, timeout=75)
+    # opencli 默认 60s 命令上限对 post 不够用(2026-09-13 实测:帖子已发出、命令仍报 TIMEOUT,
+    # 上层会误判为失败)。post 没有 --timeout 参数,只能走这个全局环境变量。
+    os.environ["OPENCLI_BROWSER_COMMAND_TIMEOUT"] = "180"
+    returncode, output = run(command, timeout=210)
     if not command_succeeded(returncode, output) and retryable_composer_failure(output):
         # Safe to retry: these failures happen before text insertion / Post click.
         run([PYTHON, os.path.join(ROOT, "preflight.py"), "--platform", "twitter", "--repair", "--deep"], timeout=90)
-        returncode, output = run(command, timeout=75)
+        returncode, output = run(command, timeout=210)
     return returncode, output
 
 
-def publish_weibo(text: str) -> dict:
-    returncode, output = run([PYTHON, os.path.join(ROOT, "weibo_post.py"), text, "--execute"], timeout=45)
+def shrink_images(images: list[str]) -> list[str]:
+    # 即刻适配器单图 >~700KB 必崩 sendCommand（base64 过 bridge 超限，2026-09-13 实测），统一压成 ≤~500KB jpg
+    import tempfile
+    out_dir = tempfile.mkdtemp(prefix="social_img_")
+    shrunk = []
+    for index, image in enumerate(images):
+        for quality, edge in ((70, 1600), (60, 1280), (50, 1080)):
+            target = os.path.join(out_dir, f"img{index}-{quality}.jpg")
+            run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", str(quality), "-Z", str(edge), image, "--out", target])
+            if os.path.exists(target) and os.path.getsize(target) <= 500_000:
+                break
+        shrunk.append(target)
+    return shrunk
+
+
+def publish_weibo(text: str, images: list[str], execute: bool = True) -> dict:
+    command = [PYTHON, os.path.join(ROOT, "weibo_post.py"), text]
+    for image in images:
+        command += ["--image", image]
+    if execute:
+        command.append("--execute")
+    returncode, output = run(command, timeout=45 + 60 * len(images))
     return {"ok": command_succeeded(returncode, output), "output": output}
 
 
-def publish_jike(text: str) -> dict:
-    returncode, output = run([OPENCLI, "jike", "create", text, "-f", "json"], timeout=75)
+def publish_jike(text: str, images: list[str], execute: bool = True) -> dict:
+    command = [OPENCLI, "jike", "create", text, "-f", "json"]
+    if images:
+        command += ["--images", ",".join(images)]
+    if not execute:
+        command += ["--dry-run", "true"]   # 本机补丁：填好图文、核验后清空，不发送
+    returncode, output = run(command, timeout=120 + 60 * len(images))  # 实测 1 图 128s
     return {"ok": command_succeeded(returncode, output), "output": output}
 
 
@@ -154,6 +182,9 @@ def main() -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--text")
     source.add_argument("--content-file")
+    parser.add_argument("--image", action="append", default=[], help="配图路径，可多次；微博、即刻都会带上")
+    parser.add_argument("--rehearse", action="store_true",
+                        help="彩排：微博真上传图片拿 pid、即刻真填图文后清空，都不发帖")
     parser.add_argument("--execute", action="store_true", help="Required for irreversible publishing")
     parser.add_argument("--skip-preflight", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -172,7 +203,19 @@ def main() -> int:
     plan = {
         "ok": True, "dry_run": not args.execute, "platforms": platforms,
         "length": len(text), "twitter_parts": split_for_x(text) if "twitter" in platforms else [],
+        "images": args.image,
     }
+    missing = [image for image in args.image if not os.path.exists(image)]
+    if missing:
+        print(json.dumps({"ok": False, "error": f"配图不存在：{missing}（不许去掉配图继续发）"}, ensure_ascii=False))
+        return 1
+    args.image = shrink_images(args.image)
+    if args.rehearse and not args.execute:
+        rehearsers = {"weibo": publish_weibo, "jike": publish_jike}
+        results = {p: rehearsers[p](text, args.image, execute=False) for p in platforms if p in rehearsers}
+        print(json.dumps({"ok": all(r["ok"] for r in results.values()), "rehearse": True, "results": results},
+                         ensure_ascii=False, indent=2))
+        return 0 if all(r["ok"] for r in results.values()) else 1
     if not args.execute:
         print(json.dumps(plan, ensure_ascii=False, indent=2))
         return 0
@@ -183,7 +226,8 @@ def main() -> int:
             print(json.dumps({"ok": False, "stage": "preflight", "detail": output}, ensure_ascii=False, indent=2))
             return 1
 
-    publishers = {"weibo": publish_weibo, "twitter": publish_twitter, "jike": publish_jike}
+    publishers = {"weibo": lambda t: publish_weibo(t, args.image), "twitter": publish_twitter,
+                  "jike": lambda t: publish_jike(t, args.image)}
     results = {platform: publishers[platform](text) for platform in platforms}
     response = {"ok": all(item["ok"] for item in results.values()), "results": results}
     print(json.dumps(response, ensure_ascii=False, indent=2))

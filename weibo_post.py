@@ -82,9 +82,30 @@ def list_posts(n=5):
     return {'ok': 1, 'count': len(posts), 'posts': posts}
 
 
-def post(content):
-    data, err = _req('https://weibo.com/ajax/statuses/update', method='POST',
-                     body={'content': content, 'visible': '0'})
+def upload_pic(path):
+    """上传图片拿 pid（不公开、不发帖；2026-09-13 实测返回 A00006 + pid）。"""
+    import base64, re
+    cookies = load_cookies()
+    b64 = base64.b64encode(open(path, 'rb').read()).decode()
+    url = ('https://picupload.weibo.com/interface/pic_upload.php?mime=image%2Fjpeg'
+           '&data=base64&url=0&markpos=1&logo=&nick=0&marks=1&app=miniblog')
+    req = urllib.request.Request(url, data=urllib.parse.urlencode({'b64_data': b64}).encode(), headers={
+        'user-agent': UA, 'referer': 'https://weibo.com/',
+        'cookie': '; '.join('%s=%s' % (k, v) for k, v in cookies.items()),
+        'content-type': 'application/x-www-form-urlencoded'})
+    try:
+        raw = urllib.request.urlopen(req, timeout=60).read().decode('utf-8', 'ignore')
+    except Exception as e:
+        return None, '%s: %s' % (type(e).__name__, e)
+    m = re.search(r'"pid":"([^"]+)"', raw)
+    return (m.group(1), None) if m else (None, '图片上传失败：' + raw[-200:])
+
+
+def post(content, pids=None):
+    body = {'content': content, 'visible': '0'}
+    if pids:
+        body['pic_id'] = '|'.join(pids)
+    data, err = _req('https://weibo.com/ajax/statuses/update', method='POST', body=body)
     if err:
         return err
     if data.get('ok') == 1:
@@ -99,6 +120,11 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     execute = '--execute' in args          # R4-5：不可逆发帖需显式 --execute
     args = [a for a in args if a != '--execute']
+    images = []                            # --image 路径，可多次（2026-09-13 加）
+    while '--image' in args:
+        i = args.index('--image')
+        images.append(os.path.expanduser(args[i + 1]))
+        del args[i:i + 2]
     if args and args[0] == '--check':
         out = check()
     elif args and args[0] == '--list':
@@ -108,12 +134,21 @@ if __name__ == '__main__':
         text = args[0]
         if len(text) > MAX_LEN:
             out = {'ok': 0, 'error': '正文过长（%d>%d 字）' % (len(text), MAX_LEN)}
-        elif not execute:
-            # R4-5：默认只预演不真发（微博发帖不可逆）。确认无误后加 --execute 才真正发送。
-            out = {'ok': 1, 'dry_run': 1, 'preview': text, 'len': len(text),
-                   'note': '预演，未发布。确认无误后加 --execute 真正发送。'}
         else:
-            out = post(text)
+            pids, err = [], None
+            for p in images:               # 上传图片不公开，预演也跑，提前暴露上传故障
+                pid, err = upload_pic(p) if os.path.exists(p) else (None, '图片不存在：' + p)
+                if err:
+                    break
+                pids.append(pid)
+            if err:
+                out = {'ok': 0, 'error': err}
+            elif not execute:
+                # R4-5：默认只预演不真发（微博发帖不可逆）。确认无误后加 --execute 才真正发送。
+                out = {'ok': 1, 'dry_run': 1, 'preview': text, 'len': len(text), 'pids': pids,
+                       'note': '预演，未发布（图片已上传拿到 pid）。确认无误后加 --execute 真正发送。'}
+            else:
+                out = post(text, pids)
     else:
         out = {'ok': 0, 'error': 'usage: weibo_post.py "正文" [--execute]  |  --check  |  --list [N]'}
     print(json.dumps(out, ensure_ascii=False))
