@@ -70,7 +70,7 @@ def main():
         die("作者超过 8 字")
     cover = Path(a.cover).expanduser()
     if not cover.exists():
-        die(f"封面不存在：{cover}（先用 gpt-image-2 生成，不许省略封面）")
+        die(f"封面不存在：{cover}（先用 gpt-image-2.5-sunburst 生成，不许省略封面）")
 
     text = convert(Path(a.markdown).expanduser().read_text(encoding="utf-8"))
     residue = [l for l in text.splitlines() if re.search(r"^#|^>|\*\*|\]\(", l)]

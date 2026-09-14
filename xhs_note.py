@@ -74,7 +74,7 @@ def main():
         die(f"标题 {len(a.title)} 字，小红书上限 20")
     cover = Path(a.cover).expanduser()
     if not cover.exists():
-        die(f"封面不存在：{cover}（先用 gpt-image-2 生成，不许省略封面）")
+        die(f"封面不存在：{cover}（先用 gpt-image-2.5-sunburst 生成，不许省略封面）")
 
     body = convert(Path(a.markdown).expanduser().read_text(encoding="utf-8")).strip()
     if len(body) > MAX_BODY:
