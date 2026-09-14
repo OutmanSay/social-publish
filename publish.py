@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic, confirmation-gated publisher for Weibo, X and Jike."""
+"""Deterministic, confirmation-gated publisher for supported social platforms."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 OPENCLI = shutil.which("opencli") or os.path.expanduser("~/.local/bin/opencli")
 PYTHON = sys.executable
 STATUS_URL = re.compile(r"https://x\.com/[^\s/]+/status/\d+")
+TWITTER_DISABLED_ERROR = """❌ publish.py 的 X 直发路径已停用（两处 --window background + split_for_x 用 \\n\\n 拼段落，与 X 的 insertText 注入能力冲突，必然失败）。
+请用 x_thread/publish_thread.py —— 用法见 SKILL.md「X thread 发布」节。"""
 
 
 def weighted_length(text: str) -> int:
@@ -37,6 +39,7 @@ def hard_split(text: str, limit: int) -> list[str]:
 
 
 def split_for_x(text: str, limit: int = 260) -> list[str]:
+    """已停用的旧 X 拆分逻辑；保留用于回退和后续重构，不再从 main() 调用。"""
     if weighted_length(text) <= limit:
         return [text.strip()]
     chunks = re.split(r"(?<=[。！？!?；;])|\n{2,}", text.strip())
@@ -105,6 +108,7 @@ def retryable_composer_failure(output: str) -> bool:
 
 
 def twitter_command(command: list[str]) -> tuple[int, str]:
+    """已停用的旧 X 命令包装；保留用于回退，不再从 main() 调用。"""
     # opencli 默认 60s 命令上限对 post 不够用(2026-09-13 实测:帖子已发出、命令仍报 TIMEOUT,
     # 上层会误判为失败)。post 没有 --timeout 参数,只能走这个全局环境变量。
     os.environ["OPENCLI_BROWSER_COMMAND_TIMEOUT"] = "180"
@@ -196,6 +200,11 @@ def publish_baijiahao(text: str, images: list[str], title: str = "", execute: bo
 
 
 def publish_twitter(text: str) -> dict:
+    """已停用的旧 X 直发路径；保留代码供未来修复，禁止从 main() 调用。
+
+    停用原因：这里使用 background 窗口，且 split_for_x() 会用双换行拼段落，
+    与当前 X 的 insertText 注入能力冲突。可用实现是 x_thread/publish_thread.py。
+    """
     # 用 persistent 会话复用同一窗口发 Thread(解决 2026-08-12:ephemeral 每条一窗,
     # 关窗触发 x.com beforeunload 弹窗,对话框无人应答使 opencli 命令挂起,驱动发布的模型卡死)。
     # 全部发完后窗口保留为后台 tab,下次发布直接复用;不要手动 close,关窗仍可能触发弹窗。
@@ -235,6 +244,10 @@ def main() -> int:
     args = parser.parse_args()
 
     platforms = list(dict.fromkeys(args.platform))
+    if "twitter" in platforms:
+        print(TWITTER_DISABLED_ERROR)
+        return 2
+
     if args.text is not None:
         text = args.text
     else:
@@ -247,7 +260,7 @@ def main() -> int:
 
     plan = {
         "ok": True, "dry_run": not args.execute, "platforms": platforms,
-        "length": len(text), "twitter_parts": split_for_x(text) if "twitter" in platforms else [],
+        "length": len(text),
         "images": args.image,
     }
     missing = [image for image in args.image if not os.path.exists(image)]
@@ -271,14 +284,13 @@ def main() -> int:
         return 0
 
     if not args.skip_preflight:
-        returncode, output = preflight([p for p in platforms if p in {"weibo", "twitter", "jike"}])
+        returncode, output = preflight([p for p in platforms if p in {"weibo", "jike"}])
         if returncode != 0:
             print(json.dumps({"ok": False, "stage": "preflight", "detail": output}, ensure_ascii=False, indent=2))
             return 1
 
     publishers = {
         "weibo": lambda t: publish_weibo(t, args.image),
-        "twitter": publish_twitter,
         "jike": lambda t: publish_jike(t, args.image),
         "toutiao": lambda t: publish_toutiao(t, args.image, title=args.title, execute=True),
         "baijiahao": lambda t: publish_baijiahao(t, args.image, title=args.title, execute=True),

@@ -91,6 +91,8 @@ python3 <SKILL_DIR>/xhs_note.py 精简版.md \
 
 **⛔ 本脚本没有 `--execute` 门槛，裸跑即真发**，所以「不可破坏的规则」第 1 条（发布前必须取得用户对最终正文和平台的明确确认）是**它唯一也是必须的门槛**。
 
+`publish.py --platform twitter` 的旧直发路径已显式停用：它使用 `--window background`，且 `split_for_x()` 会用双换行拼段落，与当前 X 的 `insertText` 注入能力冲突。X 发布只走本节的 `x_thread/publish_thread.py`。
+
 ```bash
 python3 x_thread/publish_thread.py 1                    # 从第 1 条开始
 python3 x_thread/publish_thread.py 3 <第2条的URL>        # 续发

@@ -57,7 +57,7 @@ python3 mp_draft.py 文章.md --title 标题 --summary 摘要 --cover 封面.png
 |---|---|
 | `SKILL.md` | 给 agent 的规程：确认门、失败分类、各平台坑 |
 | `preflight.py` | 只读登录态检查，`--repair` 用后台标签页刷新 |
-| `publish.py` | 微博/即刻/X 统一发布，默认预演 |
+| `publish.py` | 微博/即刻/今日头条/百家号统一发布，默认预演；X 直发已停用，改走 `x_thread/publish_thread.py` |
 | `weibo_post.py` | 微博 HTTP 发帖、传图、`--check`、`--list` |
 | `mp_draft.py` | 公众号草稿一条命令，含封面核验 |
 | `md2plain.py` | Markdown → 公众号可用纯文本 |
