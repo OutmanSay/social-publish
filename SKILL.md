@@ -87,16 +87,9 @@ python3 <SKILL_DIR>/xhs_note.py 精简版.md \
 
 **X 免费号单条 280 字符**（中文按双宽算），长文只能拆 **thread**（首条 normal post + 后续 reply 自己）。
 `opencli twitter post` 的多段落路径**不可用**（合成 `ClipboardEvent('paste')` 不被 Draft.js 接收），
-但**单段落一直是通的** —— 拆成单段落即可。
+但**单段落一直是通的** —— 拆成单段落即可。这是平台原生做法，不是妥协。
 
-**两个决定性因素（缺一不可）**：
-
-1. **`--window foreground`，绝不用 `background`** —— background 打开的标签会被回收成
-   `about:blank`，**报错却伪装成 `no box` / `verify failed`**，极难排查。
-2. **用 `execCommand('insertText')` 一步注入**，不用 `opencli browser type`（后者报
-   `{"typed": true}` 但文字没进 —— X 页面重渲染使 ref 失效）。
-
-**执行**：
+**⛔ 本脚本没有 `--execute` 门槛，裸跑即真发**，所以「不可破坏的规则」第 1 条（发布前必须取得用户对最终正文和平台的明确确认）是**它唯一也是必须的门槛**。
 
 ```bash
 python3 x_thread/publish_thread.py 1                    # 从第 1 条开始
@@ -105,14 +98,7 @@ python3 x_thread/publish_thread.py 3 <第2条的URL>        # 续发
 #   session 名写 /tmp/xfg-session
 ```
 
-**验证链结构用 `opencli twitter thread <首条 id>`** —— 它从首条遍历所有回复，
-比 `twitter tweets`（只返回顶层帖）可靠得多。
-
-**三个已修的坑**（都写在脚本注释里）：
-- 取最新帖 id 要 **snowflake 取数值最大**，不能取列表 `[0]`（顺序不保证，会永远拿到最旧的）
-- 点 Post 前要**轮询等按钮可用**（文本注入后按钮短暂 disabled）
-- **所有失败路径都必须清空编辑器** —— x.com 只在编辑器有内容时注册 `beforeunload`，
-  残留草稿会让之后任何导航/关窗弹出 **Chrome 原生确认框**（脚本够不着，会冻住整个浏览器）
+原理、两个决定性因素、别再走的弯路、验证方法 —— 见下面「X / Twitter：拆 Thread 可用」一节。
 
 ### ⭐ 长正文：`opencli browser eval` 的参数上限（2026-09-14 修）
 
@@ -156,7 +142,7 @@ python3 x_thread/publish_thread.py 3 <第2条的URL>        # 续发
 | 知乎 | `opencli zhihu answer` | 问题回答；单独按最终答案确认后执行 |
 | 公众号 | `mp_draft.py` → `opencli weixin create-draft`（打补丁） | 只创建草稿，最终发表人工操作 |
 | 小红书 | `xhs_note.py` → `opencli xiaohongshu publish`（打补丁） | 正文上限 1000 字 |
-| X | OpenCLI Twitter adapter | ⚠️ 多段落长帖不可用，见下 |
+| X | `x_thread/publish_thread.py` → OpenCLI Twitter adapter | 长文拆 thread；⚠️ 脚本无 `--execute`，裸跑即真发，见下 |
 
 不要把 Chrome 里肉眼可见的登录状态当作 cookie 证明（可能登在另一个 Profile），以 `preflight.py` 结果为准。
 
@@ -216,11 +202,36 @@ opencli weixin create-draft "$(cat 正文.txt)" \
 
 **要排版就走 `cgi-bin/draft/add` 官方 API**（个人订阅号可用、无需认证）。`content` 字段支持 HTML 标签，必须少于 2 万字符，图片 URL 必须来自「上传图文消息内的图片获取 URL」接口。流程：Markdown → **内联样式** HTML（不认 `<style>` 和 class）→ `draft/add`。需 AppID+AppSecret，出口 IP 要加白名单。
 
-## X / Twitter：多段落长帖不可用
+## X / Twitter：拆 Thread 可用（见 `x_thread/publish_thread.py`）
 
-`publish.py` 仍保留 X 支持（按加权长度拆 Thread，persistent 会话复用窗口），但多段落长帖发不出去，已放弃修复。给想接着修的人：
+X 免费号单条限 **280 字符**（中文按双宽算），长文只能拆 **thread**（首条 normal post + 后续逐条 reply 自己）。这是平台原生做法，不是妥协。
+`x_thread/publish_thread.py` 实测跑通（6 条串成一条完整链）。
 
-- **根因**：Draft.js 吞掉 `Input.insertText` 里的 `\n`，合成 Enter 键也无效。**正解是合成 `paste` 事件**走 Draft.js 自己的粘贴处理器，浏览器里实测三段文字换行全保住。
-- **卡点**：改包内 `clis/twitter/post.js` 不生效，加 throw 也照常执行，存在一层没找到的加载/缓存机制。
-- **已推翻的方向**：残留草稿导致卡死；写入和校验取了不同 composer 节点；按行插入 + 敲 Enter。
-- **保留的修复**：`opencli twitter post` 默认 60s 命令上限不够（发成功却报失败），`publish.py` 用 `OPENCLI_BROWSER_COMMAND_TIMEOUT=180`（post 没有 `--timeout` 参数）。失败时先清空编辑框：x.com 在编辑框有内容时注册 `beforeunload`，弹窗没人应答会冻住整个浏览器。
+**⛔ 该脚本没有 `--execute` 门槛，裸跑即真发。** 跑之前必须已确认最终正文。
+
+### 两个决定性因素（缺一不可）
+
+1. **X 的所有写操作（发布 / 删除 / 回复）必须 `--window foreground`。** `--window background` 打开的标签**会被回收成 `about:blank`**，而报错**伪装成** `no box` / `Could not verify tweet text` / `Could not find the "More" context menu` —— 看起来像注入失败或登录态问题，**其实是页面没了**。极难排查。
+2. **用 `execCommand('insertText')` 一步注入**，别用 `opencli browser type`：它报 `{"typed":true}` 但**文字哪里都没进**（X 页面频繁重渲染会让 ref 失效）。正解是在**一次 `eval` 里**完成「选节点 → 聚焦 → 清空 → insertText → 读回校验」。
+
+### 别再走的弯路
+
+- ❌ **「合成 `paste` 事件是正解」是错的。** 合成 `ClipboardEvent('paste')` 进得去但没用：handler 跑了、`defaultPrevented=true`，编辑器仍为空（Draft.js 读不到合成的 DataTransfer）。
+- ❌ **「改 `clis/**/*.js` 不生效、有一层没找到的加载机制」—— 机制已找到**：包根有 `cli-manifest.json` 时，`discoverClis()` 直接走 manifest 快路径**并 `continue` 跳过文件系统扫描**，`clis/**/*.js` 根本不加载。要改适配器**先把 manifest 移走**；只加参数则改 manifest。
+- ❌ **「`~/.opencli/clis/` 本地覆盖目录不被加载」也是错的** —— 它**真的会加载，且覆盖内置**（在 builtin 之后跑）。且 `discoverClisFromFs` 对每个子目录都扫、**不过滤目录名**，所以目录名带 `.bak-*` 后缀**照样被当适配器加载**。**这正是"改了代码不生效"的真凶**：残留的备份目录覆盖了包内适配器。
+- ❌ 按行插入 + 敲 Enter：CDP `nativeKeyPress` 不传 `code`/`windowsVirtualKeyCode`，Draft.js 不认；JS 合成 `KeyboardEvent` 过不了 `isTrusted` 校验。
+
+**排查加载问题的正确工具**：`NODE_OPTIONS="--import=<hook>"` + 自定义 loader 打印**所有被 import 的 URL**。别靠猜。
+
+### 验证链结构
+
+```bash
+opencli twitter thread <首条 id> -f json     # ✅ 首条 + 全部回复，一次拿全
+```
+
+⚠️ 别用 `twitter tweets` 验链：它**覆盖面不全**（实测同一条 6 条 thread，`thread` 返回完整 6 条、`tweets` 只返回 4 条），会误判成「帖子丢了」。
+且 `in_reply_to` 是**直接父节点**不是会话根 —— 逐条核对时**必须按 id 匹配**再读。
+
+### 保留的修复
+
+`opencli twitter post` 默认 60s 命令上限不够（发成功却报失败），用 `OPENCLI_BROWSER_COMMAND_TIMEOUT=180`（post 没有 `--timeout` 参数）。失败时先清空编辑框：x.com 在编辑框有内容时注册 `beforeunload`，弹窗没人应答会冻住整个浏览器。
