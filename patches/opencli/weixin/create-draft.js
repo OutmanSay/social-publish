@@ -61,6 +61,25 @@ async function uploadContentImage(page, imagePath) {
         throw new CommandExecutionError(`Image not found: ${absPath}`);
     }
 
+    // 光标移到正文开头，图片插在顶部而不是末尾（2026-09-14）
+    // 等 ProseMirror 把 insertText 的原始 DOM 规整成 span[leaf]，否则光标落空
+    await page.wait(2);
+    await page.evaluate(`(() => {
+        var editors = document.querySelectorAll('div[contenteditable="true"]');
+        var ed = editors[editors.length - 1];
+        if (!ed) return;
+        ed.focus();
+        var leaf = ed.querySelector('span[leaf]');
+        var r = document.createRange();
+        r.setStart((leaf && leaf.firstChild) || ed, 0);
+        r.collapse(true);
+        var s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        document.dispatchEvent(new Event('selectionchange'));
+    })()`);
+    await page.wait(1.5);
+
     await page.evaluate(`(() => {
         var li = document.querySelector('#js_editor_insertimage');
         if (li) li.click();
@@ -103,6 +122,18 @@ async function uploadContentImage(page, imagePath) {
     }
     if (cdnCount === 0) {
         throw new CommandExecutionError('Image did not upload to WeChat CDN');
+    }
+    const atTop = await page.evaluate(`(() => {
+        var editors = document.querySelectorAll('div[contenteditable="true"]');
+        var ed = editors[editors.length - 1];
+        var img = ed && ed.querySelector('img[src*="mmbiz"]');
+        var leaf = ed && ed.querySelector('span[leaf]');
+        if (!img || !leaf || !leaf.textContent.trim()) return 'ok';
+        if (img.compareDocumentPosition(leaf) & Node.DOCUMENT_POSITION_FOLLOWING) return 'ok';
+        return ed.innerHTML.replace(/ (src|style|data-[a-z-]+|class|alt)="[^"]*"/g, '').slice(0, 300);
+    })()`);
+    if (atTop !== 'ok') {
+        throw new CommandExecutionError('配图没插到正文顶部：' + atTop);
     }
 }
 

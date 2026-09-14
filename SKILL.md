@@ -154,6 +154,7 @@ opencli weixin create-draft "$(cat 正文.txt)" \
 **封面上传**：`create-draft.js` 原版走 `setFileInput`，必报 `fileChooserOpened` 超时。补丁改成 DataTransfer 直塞。
 - 输出里的 `(with cover)` 只要传了参数就会打印，**不代表封面设上了**。以 `opencli weixin drafts` 里新草稿**没有**「图文内容不完整 请补充封面图」为准。
 - ⛔ **封面上传失败 = 报失败**，不许去掉 `--cover-image` 重跑然后说"发布完毕"。
+- **配图在正文顶部**：补丁里先等 2 秒让 ProseMirror 规整 DOM，再把光标放到第一个 `span[leaf]` 开头，然后插图。插完会校验图是否在第一段文字前面，不在就报「配图没插到正文顶部」并中止。
 
 **重做草稿会留下旧草稿**：opencli 没有删草稿命令，报告里写明要手动删哪几条（按「更新于」时间点名）。
 
