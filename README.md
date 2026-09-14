@@ -29,7 +29,7 @@
 | 知乎 | opencli | 回答问题（发了删不掉，先定稿） |
 | 公众号 | opencli（补丁） | 草稿：标题/作者/摘要/封面四件齐，配图在正文顶部 |
 | 小红书 | opencli（补丁） | 封面 + 本地渲染文字卡 |
-| X | opencli | 短帖可用，多段落长帖不可用（见 SKILL.md） |
+| X | `x_thread/publish_thread.py` → opencli | 长文拆 thread（免费号单条 280 字符）；⚠️ 脚本无 `--execute`，裸跑即真发（见 SKILL.md） |
 
 ## 快速开始
 
