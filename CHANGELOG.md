@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-09-14.4 📦
+- **新增 X (Twitter) thread 发布**：`x_thread/publish_thread.py`。
+  - X 免费号单条 280 字符，长文只能拆 thread；本脚本按 `in_reply_to` 串链。
+  - 关键：`--window foreground`（background 的标签会被回收成 `about:blank`，报错伪装成注入失败）
+    + `execCommand('insertText')` 一步注入（`opencli browser type` 报成功但文字不进）。
+  - 修的三个坑：最新帖 id 取 snowflake 最大值（不能取列表 [0]）；点 Post 前轮询等按钮可用；
+    所有失败路径清空编辑器（否则触发 Chrome 原生 beforeunload 框冻住浏览器）。
+  - 验证链结构用 `opencli twitter thread <首条 id>`。
+  - SKILL.md 补「X thread 发布」一节。
+
 git 里有文件快照的版本标了 📦；没有的只记变化，原文件没留存。07-15、07-31 两条的日期取自文件修改时间，其余来自当时的工作记录。
 
 ## 2026-09-14.3 📦
