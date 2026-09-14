@@ -11,7 +11,7 @@
 ## 改 opencli 适配器的四个坑
 
 1. 参数定义以包根 `cli-manifest.json` 为准，只改 js 会报 `unknown option`。`apply_patches.py` 会一并补 manifest。
-   反过来说：**包根存在 `cli-manifest.json` 时，`clis/**/*.js` 根本不会被加载**（`discoverClis()` 走 manifest 快路径后 `continue`，跳过文件系统扫描）。所以**要改适配器逻辑，先把 manifest 移走**；只加参数则改 manifest。
+   反过来说：manifest **存在且成功加载**时，`discoverClis()` 走快路径并 `continue`，跳过文件系统扫描；manifest 无效或加载失败则 fallthrough 回 `discoverClisFromFs`（源码：`discovery.js:104-113`）。所以**要改适配器逻辑，先把可用 manifest 移走**；只加参数则改 manifest。
 2. opencli 常驻 daemon 缓存适配器模块，改完必须 `opencli daemon restart`，否则等于没改。
 3. ⚠️ **`~/.opencli/clis/<site>/` 这个"本地覆盖目录"是【真的会被加载】的，而且覆盖内置**（它在 builtin 之后被加载）。早期文档曾把它记成"不被加载"，是错的——这个误判会让人查不出"改了代码不生效"。
 4. ⚠️ **`.bak-*` 后缀的目录照样会被加载。** `discoverClisFromFs` 对目录下每个子目录里的 `.js` 都 import，**不过滤目录名**。所以备份适配器目录时**必须挪到 `clis/` 之外**，否则备份目录会静默覆盖正式的适配器——这是"改了代码不生效"最常见的原因。`opencli doctor` 会把这类目录报成 shadow。

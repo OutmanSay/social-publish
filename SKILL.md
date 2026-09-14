@@ -217,7 +217,7 @@ X 免费号单条限 **280 字符**（中文按双宽算），长文只能拆 **
 ### 别再走的弯路
 
 - ❌ **「合成 `paste` 事件是正解」是错的。** 合成 `ClipboardEvent('paste')` 进得去但没用：handler 跑了、`defaultPrevented=true`，编辑器仍为空（Draft.js 读不到合成的 DataTransfer）。
-- ❌ **「改 `clis/**/*.js` 不生效、有一层没找到的加载机制」—— 机制已找到**：包根有 `cli-manifest.json` 时，`discoverClis()` 直接走 manifest 快路径**并 `continue` 跳过文件系统扫描**，`clis/**/*.js` 根本不加载。要改适配器**先把 manifest 移走**；只加参数则改 manifest。
+- ❌ **「改 `clis/**/*.js` 不生效、有一层没找到的加载机制」—— 机制已找到**：manifest **存在且成功加载**时，`discoverClis()` 走快路径并 `continue`，跳过文件系统扫描；manifest 无效或加载失败则 fallthrough 回 `discoverClisFromFs`。源码：`discovery.js:104-113`。要改适配器**先把可用 manifest 移走**；只加参数则改 manifest。
 - ❌ **「`~/.opencli/clis/` 本地覆盖目录不被加载」也是错的** —— 它**真的会加载，且覆盖内置**（在 builtin 之后跑）。且 `discoverClisFromFs` 对每个子目录都扫、**不过滤目录名**，所以目录名带 `.bak-*` 后缀**照样被当适配器加载**。**这正是"改了代码不生效"的真凶**：残留的备份目录覆盖了包内适配器。
 - ❌ 按行插入 + 敲 Enter：CDP `nativeKeyPress` 不传 `code`/`windowsVirtualKeyCode`，Draft.js 不认；JS 合成 `KeyboardEvent` 过不了 `isTrusted` 校验。
 
@@ -229,7 +229,7 @@ X 免费号单条限 **280 字符**（中文按双宽算），长文只能拆 **
 opencli twitter thread <首条 id> -f json     # ✅ 首条 + 全部回复，一次拿全
 ```
 
-⚠️ 别用 `twitter tweets` 验链：它**覆盖面不全**（实测同一条 6 条 thread，`thread` 返回完整 6 条、`tweets` 只返回 4 条），会误判成「帖子丢了」。
+⚠️ 别用 `twitter tweets` 验链：它是**折叠后的时间线视图，不是 thread 清单**。同一条 6 条 thread 连续 3 次实测均只覆盖 3 条（根帖 + 链尾两条，第 2–4 条被折叠/遗漏），会误判成「帖子丢了」。
 且 `in_reply_to` 是**直接父节点**不是会话根 —— 逐条核对时**必须按 id 匹配**再读。
 
 ### 保留的修复
