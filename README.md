@@ -1,9 +1,9 @@
 # social-publish 📢
 
-> 🧠 **AI Agent Skill** — Let your agent cross-post to Weibo, Jike, Zhihu, WeChat Official Accounts and Xiaohongshu, with a confirmation gate and no silent failures.
+> 🧠 **AI Agent Skill** — Let your agent cross-post to Weibo, Jike, Zhihu, WeChat Official Accounts, Xiaohongshu, Toutiao and Baijiahao, with a confirmation gate and no silent failures.
 > Works with [OpenClaw](https://github.com/openclaw/openclaw) · [Claude Code](https://claude.com/claude-code) · and any agent runtime that can shell out.
 
-**写完一篇，跟 AI 说"全平台发"，它把微博、即刻、知乎、公众号草稿、小红书都办了。每一步要么真成功，要么明确报失败。**
+**写完一篇，跟 AI 说"全平台发"，它把微博、即刻、知乎、公众号草稿、小红书、今日头条、百家号都办了。每一步要么真成功，要么明确报失败。**
 
 ---
 
