@@ -55,6 +55,14 @@ python3 <SKILL_DIR>/publish.py \
 #   配图不存在脚本直接报错；⛔ 不许去掉 --image 继续发
 #   脚本自动把配图压到 ≤500KB jpg（即刻单图 >~700KB 必崩 sendCommand），传原图即可
 
+# ⭐ 今日头条独立发布：标题 ≤30 字，自动开启广告收益
+python3 <SKILL_DIR>/toutiao_post.py 文章.md \
+  --title "标题（≤30字）" --cover 封面.jpg [--execute]
+
+# ⭐ 百家号独立发布：Markdown→HTML，自动绑定封面
+python3 <SKILL_DIR>/bjh_post.py 文章.md \
+  --title "文章标题" --cover 封面.jpg [--draft|--execute]
+
 # ⭐ 公众号草稿：只许用这一条，禁止手拼 opencli weixin create-draft
 # 自动做：Markdown→纯文本、压封面、补丁自检、登录检查、验封面真设上；任一步失败非零退出
 python3 <SKILL_DIR>/mp_draft.py 文章.md \
@@ -101,6 +109,8 @@ python3 <SKILL_DIR>/xhs_note.py 精简版.md \
 |---|---|---|
 | 微博 | `weibo_post.py` 读取 Chrome 指定 Profile 的 cookie，HTTP 发布 | 环境变量 `WEIBO_CHROME_PROFILE`（默认 `Default`）、`WEIBO_UID`；脚本自身也要求 `--execute` |
 | 即刻 | OpenCLI Jike adapter（打补丁后支持 `--images`、`--dry-run`） | |
+| 今日头条 | `toutiao_post.py` → OpenCLI 后台静默发文 | 标题 ≤30 字，自动开启广告收益分成 |
+| 百家号 | `bjh_post.py` → OpenCLI 后台富文本发文 | 支持单图封面自动绑定，支持存草稿/直接发布 |
 | 知乎 | `opencli zhihu answer` | 问题回答；单独按最终答案确认后执行 |
 | 公众号 | `mp_draft.py` → `opencli weixin create-draft`（打补丁） | 只创建草稿，最终发表人工操作 |
 | 小红书 | `xhs_note.py` → `opencli xiaohongshu publish`（打补丁） | 正文上限 1000 字 |
