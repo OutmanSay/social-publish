@@ -83,6 +83,17 @@ python3 <SKILL_DIR>/xhs_note.py 精简版.md \
 
 ⚠️ 正文里贴链接必须用纯 ASCII 地址（百分号编码）。中文路径原样贴，多个平台会在汉字处截断成 404。
 
+### ⭐ 长正文：`opencli browser eval` 的参数上限（2026-09-14 修）
+
+**症状**：头条/百家号发长文报 `OSError: [Errno 7] Argument list too long: 'opencli'`。
+
+**根因**：这两个脚本原先把整篇正文 HTML **+ 封面 base64**（一张图就 335KB）拼成一个 JS 字符串，当**命令行位置参数**传给 `opencli browser eval`，超过系统 `ARG_MAX`。**不是内容问题，跟标题/图片无关，纯粹是传参方式。**
+
+**正解：分片传输**（已落地在这两个脚本里）。
+`push_payload(session, key, data)` 按 `CHUNK = 20000` 把内容逐片累加到页面上的 `window.__tt_payload` / `window.__bjh_payload`，最后用一段**不含长内容**的短 JS 读取并注入。⚠️ 任何往 `eval` 里塞大段文本的新脚本都要照这个来。
+
+**报告纪律**：这类错误**不是** `auth`/`adapter`，别按"页面打不开"处理；也**不许绕开脚本**（去掉封面重试之类）。原样报错 + 修脚本。
+
 ## 失败分类
 
 | category | 含义 | 处理 |

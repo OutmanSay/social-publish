@@ -42,6 +42,21 @@ def opencli_eval(session: str, js_code: str) -> any:
         return r.stdout.strip()
 
 
+# opencli 的 eval 只接受位置参数，整篇正文 + 封面 base64 塞进去会超 ARG_MAX。
+# 分块送：先按 CHUNK 把内容累到页面上的 window.__tt_payload，最后一步再注入。
+CHUNK = 20000
+
+
+def push_payload(session: str, key: str, data: str) -> None:
+    """把 data 分片追加到页面 window.__tt_payload[key]。"""
+    opencli_eval(session, f"window.__tt_payload = window.__tt_payload || {{}}; window.__tt_payload[{json.dumps(key)}] = '';")
+    for i in range(0, len(data), CHUNK):
+        seg = data[i:i + CHUNK]
+        r = opencli_eval(session, f"window.__tt_payload[{json.dumps(key)}] += {json.dumps(seg)}; window.__tt_payload[{json.dumps(key)}].length")
+        if r is None:
+            die(f"分片传输失败（{key} 第 {i // CHUNK + 1} 片）")
+
+
 def post_article(title: str, text: str, cover_path: Path, execute: bool = False) -> dict:
     if len(title) > MAX_TITLE:
         die(f"标题共 {len(title)} 字，超过头条号 {MAX_TITLE} 字上限")
@@ -67,37 +82,44 @@ def post_article(title: str, text: str, cover_path: Path, execute: bool = False)
         die(f"无法打开头条号创作页面：{r.stderr or r.stdout}")
     time.sleep(4)
 
-    js_inject = f"""
-    (() => {{
+    # 先把长内容分片送进页面（避免命令行参数超长），再用短 JS 注入
+    print("[*] 分片传输正文与封面...")
+    push_payload(session, "title", title)
+    push_payload(session, "html", html)
+    push_payload(session, "cover", b64)
+
+    js_inject = """
+    (() => {
+        const P = window.__tt_payload || {};
         const ta = document.querySelector("textarea[placeholder*='标题']");
-        if (!ta) return {{ ok: false, error: "未找到标题输入框，请确认头条号是否已登录" }};
+        if (!ta) return { ok: false, error: "未找到标题输入框，请确认头条号是否已登录" };
         ta.focus();
         document.execCommand("selectAll", false, null);
-        document.execCommand("insertText", false, {json.dumps(title)});
-        ta.dispatchEvent(new Event("input", {{ bubbles: true }}));
+        document.execCommand("insertText", false, P.title);
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
 
         const pm = document.querySelector(".ProseMirror");
-        if (!pm) return {{ ok: false, error: "未找到 ProseMirror 编辑器" }};
+        if (!pm) return { ok: false, error: "未找到 ProseMirror 编辑器" };
         pm.focus();
         document.execCommand("selectAll", false, null);
         document.execCommand("delete", false, null);
 
         // 粘贴文本
         const dt = new DataTransfer();
-        dt.setData("text/html", {json.dumps(html)});
-        pm.dispatchEvent(new ClipboardEvent("paste", {{ clipboardData: dt, bubbles: true, cancelable: true }}));
+        dt.setData("text/html", P.html);
+        pm.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
 
         // 粘贴封面图片
-        const bin = atob("{b64}");
+        const bin = atob(P.cover);
         const arr = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        const file = new File([arr], "cover.jpg", {{ type: "image/jpeg" }});
+        const file = new File([arr], "cover.jpg", { type: "image/jpeg" });
         const dtImg = new DataTransfer();
         dtImg.items.add(file);
-        pm.dispatchEvent(new ClipboardEvent("paste", {{ clipboardData: dtImg, bubbles: true, cancelable: true }}));
+        pm.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dtImg, bubbles: true, cancelable: true }));
 
-        return {{ ok: true }};
-    }})()
+        return { ok: true };
+    })()
     """
     res = opencli_eval(session, js_inject)
     if isinstance(res, dict) and not res.get("ok"):

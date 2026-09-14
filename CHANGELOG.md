@@ -2,6 +2,14 @@
 
 git 里有文件快照的版本标了 📦；没有的只记变化，原文件没留存。07-15、07-31 两条的日期取自文件修改时间，其余来自当时的工作记录。
 
+## 2026-09-14.3 📦
+- **修复长正文发不出去**（头条 / 百家号）：`OSError: [Errno 7] Argument list too long: 'opencli'`。
+  原实现把整篇正文 HTML + 封面 base64 拼进一个 JS 字符串，当命令行位置参数传给 `opencli browser eval`，约 2400 字以上必超 `ARG_MAX`（单张封面 base64 就 ~335KB）。
+  - 新增 `push_payload(session, key, data)`：按 `CHUNK = 20000` 把内容逐片累加到页面上的 `window.__tt_payload` / `window.__bjh_payload`，最后用一段不含长内容的短 JS 读取并注入。
+  - `toutiao_post.py`、`bjh_post.py` 均改用分片传输；实测 2453 字长文发布成功。
+  - SKILL.md 补「长正文：`opencli browser eval` 的参数上限」一节，含报告纪律：这类错误不属于 `auth`/`adapter`，也不许绕开脚本重试。
+  - ⚠️ 任何新写的、要往 `eval` 里塞大段文本的脚本都要照此实现。
+
 ## 2026-09-14.2 📦
 - 新增今日头条（头条号）与百家号接入：
   - 新增 `toutiao_post.py`：头条号长文图文静默发布，支持单图封面绑定、自动开启广告收益分成。

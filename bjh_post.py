@@ -39,6 +39,21 @@ def opencli_eval(session: str, js_code: str) -> any:
         return r.stdout.strip()
 
 
+# opencli 的 eval 只接受位置参数，整篇正文 + 封面 base64 塞进去会超 ARG_MAX。
+# 分块送：先按 CHUNK 把内容累到页面上的 window.__bjh_payload，最后一步再注入。
+CHUNK = 20000
+
+
+def push_payload(session: str, key: str, data: str) -> None:
+    """把 data 分片追加到页面 window.__bjh_payload[key]。"""
+    opencli_eval(session, f"window.__bjh_payload = window.__bjh_payload || {{}}; window.__bjh_payload[{json.dumps(key)}] = '';")
+    for i in range(0, len(data), CHUNK):
+        seg = data[i:i + CHUNK]
+        r = opencli_eval(session, f"window.__bjh_payload[{json.dumps(key)}] += {json.dumps(seg)}; window.__bjh_payload[{json.dumps(key)}].length")
+        if r is None:
+            die(f"分片传输失败（{key} 第 {i // CHUNK + 1} 片）")
+
+
 def post_article(title: str, text: str, cover_path: Path, draft_only: bool = False, execute: bool = False) -> dict:
     if not cover_path.exists():
         die(f"封面图不存在：{cover_path}")
@@ -61,27 +76,34 @@ def post_article(title: str, text: str, cover_path: Path, draft_only: bool = Fal
         die(f"无法打开百家号编辑页面：{r.stderr or r.stdout}")
     time.sleep(4)
 
-    js_inject = f"""
-    (() => {{
-        if (!window.editor || !window.editor.__bjh_news_setTitle) return {{ ok: false, error: "未找到百家号编辑器接口，请确认百家号是否已登录" }};
-        window.editor.__bjh_news_setTitle({json.dumps(title)});
-        window.editor.setContent({json.dumps(html)});
+    # 先把长内容分片送进页面（避免命令行参数超长），再用短 JS 注入
+    print("[*] 分片传输正文与封面...")
+    push_payload(session, "title", title)
+    push_payload(session, "html", html)
+    push_payload(session, "cover", b64)
+
+    js_inject = """
+    (() => {
+        const P = window.__bjh_payload || {};
+        if (!window.editor || !window.editor.__bjh_news_setTitle) return { ok: false, error: "未找到百家号编辑器接口，请确认百家号是否已登录" };
+        window.editor.__bjh_news_setTitle(P.title);
+        window.editor.setContent(P.html);
 
         const iframe = document.querySelector("#ueditor iframe");
-        if (!iframe) return {{ ok: false, error: "未找到 ueditor iframe" }};
+        if (!iframe) return { ok: false, error: "未找到 ueditor iframe" };
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         doc.body.focus();
 
-        const bin = atob("{b64}");
+        const bin = atob(P.cover);
         const arr = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-        const file = new File([arr], "cover.jpg", {{ type: "image/jpeg" }});
+        const file = new File([arr], "cover.jpg", { type: "image/jpeg" });
         const dt = new DataTransfer();
         dt.items.add(file);
-        doc.body.dispatchEvent(new ClipboardEvent("paste", {{ clipboardData: dt, bubbles: true, cancelable: true }}));
+        doc.body.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
 
-        return {{ ok: true }};
-    }})()
+        return { ok: true };
+    })()
     """
     res = opencli_eval(session, js_inject)
     if isinstance(res, dict) and not res.get("ok"):
