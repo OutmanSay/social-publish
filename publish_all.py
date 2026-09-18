@@ -62,7 +62,7 @@ def extract_frontmatter(md_text: str) -> tuple[dict, str]:
     return meta, content
 
 
-def prepare_shared_assets(md_path: Path, cover_path: Path, user_title: str = "", user_summary: str = ""):
+def prepare_shared_assets(md_path: Path, cover_path: Path, user_title: str = "", user_summary: str = "", theme: str = "minimal-green"):
     raw_md = md_path.read_text(encoding="utf-8")
     meta, body = extract_frontmatter(raw_md)
     title = user_title or meta.get("title") or (body.strip().splitlines()[0].replace("#", "").strip() if body else "未命名文章")
@@ -106,6 +106,7 @@ def prepare_shared_assets(md_path: Path, cover_path: Path, user_title: str = "",
     return {
         "title": title,
         "summary": summary,
+        "theme": theme,
         "raw_md_path": md_path,
         "shared_cover": shared_cover,
         "social_text": social_text,
@@ -137,7 +138,8 @@ def publish_weixin(assets, execute):
     cmd = [
         PYTHON, str(HERE / "mp_draft.py"), str(assets["raw_md_path"]),
         "--title", assets["title"], "--summary", assets["summary"],
-        "--cover", str(assets["shared_cover"])
+        "--cover", str(assets["shared_cover"]),
+        "--theme", assets.get("theme", "minimal-green")
     ]
     if execute:
         cmd.append("--execute")
@@ -214,6 +216,7 @@ def main():
     parser.add_argument("--cover", required=True, help="封面图片路径")
     parser.add_argument("--title", default="", help="覆盖标题")
     parser.add_argument("--summary", default="", help="覆盖摘要")
+    parser.add_argument("--theme", default="minimal-green", choices=["minimal-green", "latepost", "medium", "apple"], help="微信排版主题")
     parser.add_argument("--platforms", default=",".join(ALL_PLATFORMS), help="指定发布平台，逗号隔开")
     parser.add_argument("--execute", action="store_true", help="真实发布（默认只预演）")
     args = parser.parse_args()
@@ -235,8 +238,8 @@ def main():
     print(f"==================================================")
 
     t_all_start = time.time()
-    assets = prepare_shared_assets(md_path, cover_path, args.title, args.summary)
-    print(f"[*] 资产就绪: 《{assets['title']}》 | 统一封面: {assets['shared_cover'].stat().st_size // 1024}KB")
+    assets = prepare_shared_assets(md_path, cover_path, args.title, args.summary, theme=args.theme)
+    print(f"[*] 资产就绪: 《{assets['title']}》 | 主题: {args.theme} | 统一封面: {assets['shared_cover'].stat().st_size // 1024}KB")
 
     results = {}
 

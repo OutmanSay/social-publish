@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-18.3 📦
+- **微信排版多主题切换与对齐修复**：
+  - `md2wechat.py` 增加 4 套纯净极简主题预设：`minimal-green`（极简绿标默认款）、`latepost`（晚点深红风）、`medium`（Medium 典雅衬线风）、`apple`（Apple 科技冰蓝风）。
+  - 彻底修复引用块首行悬挂空格与左右不对齐问题：加入 `text-indent: 0` 与分段垂直 12px 齐头对齐，杜绝换行悬挂。
+  - `mp_draft.py` 与 `publish_all.py` 均支持 `--theme` 参数选择主题。
+
 ## 2026-09-18.2 📦
 - **新增全平台一键并发主控调度器**：`publish_all.py`。
   - 采用「轻重分流 + 受控小并发（max_workers=2）」流水线架构，彻底杜绝 7 个重标签同时打开引发的抢夺焦点、CPU 瞬时吃紧与 WebSocket 队列超时。

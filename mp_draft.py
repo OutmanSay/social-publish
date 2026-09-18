@@ -62,6 +62,7 @@ def main():
     ap.add_argument("--summary", required=True)
     ap.add_argument("--cover", required=True)
     ap.add_argument("--author", default=os.environ.get("MP_AUTHOR", ""))
+    ap.add_argument("--theme", default="minimal-green", choices=["minimal-green", "latepost", "medium", "apple"], help="排版主题")
     ap.add_argument("--execute", action="store_true")
     a = ap.parse_args()
 
@@ -102,7 +103,7 @@ def main():
     norm = lambda s: re.sub(r"\\([_*\\#])", r"\1", s).strip(' "\'')
     before = {(norm(d["Title"]), d["Time"]) for d in drafts()}
     raw_md = Path(a.markdown).expanduser().read_text(encoding="utf-8")
-    rich_html = md_to_wechat_html(raw_md)
+    rich_html = md_to_wechat_html(raw_md, theme_name=a.theme)
     r = run(["opencli", "weixin", "create-draft", rich_html, "--title", a.title, "--author", a.author,
              "--summary", a.summary, "--cover-image", str(jpg), "--timeout", "240", "--trace", "retain-on-failure", "-f", "json"], 300)
     if r.returncode != 0:
