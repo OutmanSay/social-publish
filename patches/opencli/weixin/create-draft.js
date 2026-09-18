@@ -278,6 +278,7 @@ export const createDraftCommand = cli({
 
         const contentResult = await fillContent(page, kwargs.content);
         if (!contentResult?.ok) throw new CommandExecutionError('Failed to fill content');
+        if (/<[a-z][\s\S]*>/i.test(kwargs.content) && contentResult.rich === false) throw new CommandExecutionError('HTML content fell back to plain text (editorView not found), formatting lost');
 
         if (kwargs['cover-image']) {
             await uploadContentImage(page, kwargs['cover-image']);

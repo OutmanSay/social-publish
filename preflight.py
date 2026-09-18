@@ -69,12 +69,12 @@ def check_platform(platform: str, deep: bool = False) -> dict:
     elif platform in {"twitter", "jike", "zhihu"}:
         command = [OPENCLI, platform, "whoami"]
     elif platform == "weixin":
-        command = [OPENCLI, "weixin", "drafts"]
+        command = [OPENCLI, "weixin", "drafts", "--trace", "retain-on-failure"]
     else:
         return {"ok": False, "category": "unsupported", "detail": platform}
 
     returncode, output = run(command)
-    ok = returncode == 0
+    ok = returncode == 0 or (platform == "weixin" and "EMPTY_RESULT" in output)
     result = {
         "ok": ok,
         "category": "ok" if ok else classify(returncode, output),

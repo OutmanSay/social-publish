@@ -29,7 +29,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from md2wechat import md_to_wechat_html  # noqa: E402
+from md2wechat import THEMES, md_to_wechat_html  # noqa: E402
 
 PYTHON = sys.executable
 OPENCLI = shutil.which("opencli") or os.path.expanduser("~/.local/bin/opencli")
@@ -216,7 +216,7 @@ def main():
     parser.add_argument("--cover", required=True, help="封面图片路径")
     parser.add_argument("--title", default="", help="覆盖标题")
     parser.add_argument("--summary", default="", help="覆盖摘要")
-    parser.add_argument("--theme", default="minimal-green", choices=["minimal-green", "latepost", "medium", "apple"], help="微信排版主题")
+    parser.add_argument("--theme", default="minimal-green", choices=list(THEMES), help="微信排版主题")
     parser.add_argument("--platforms", default=",".join(ALL_PLATFORMS), help="指定发布平台，逗号隔开")
     parser.add_argument("--execute", action="store_true", help="真实发布（默认只预演）")
     args = parser.parse_args()

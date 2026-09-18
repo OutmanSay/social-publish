@@ -69,7 +69,7 @@ python3 <SKILL_DIR>/bjh_post.py 文章.md \
   --title "文章标题" --cover 封面.jpg [--draft|--execute]
 
 # ⭐ 公众号草稿：只许用这一条，禁止手拼 opencli weixin create-draft
-# 自动做：Markdown→纯文本、压封面、补丁自检、登录检查、验封面真设上；任一步失败非零退出
+# 自动做：Markdown→内联样式富文本（md2wechat.py，--theme 可选 minimal-green/latepost/medium/apple/neo-brutalism，默认 minimal-green；支持标题/列表/引用/代码/表格/分割线，正文含 Markdown 图片会直接报错）、压封面、补丁自检、登录检查、验封面真设上；任一步失败非零退出
 python3 <SKILL_DIR>/mp_draft.py 文章.md \
   --title "标题" --summary "一句话摘要" --cover 封面.png --author "作者"   # 预演
 #   ...确认后同一条命令加 --execute。--author 也可用环境变量 MP_AUTHOR
@@ -185,16 +185,16 @@ opencli zhihu answer <问题URL> "回答内容" --execute
 
 ```bash
 opencli weixin drafts                    # 先看草稿箱，避免重复
-python3 <SKILL_DIR>/md2plain.py 文章.md > 正文.txt   # ⛔ 必做，见下
+python3 <SKILL_DIR>/md2wechat.py 文章.md --theme minimal-green > 正文.html   # 内联样式 HTML
 sips -s format jpeg -s formatOptions 65 -Z 1200 cover.png --out cover.jpg  # 压到 ~150KB
-opencli weixin create-draft "$(cat 正文.txt)" \
+opencli weixin create-draft "$(cat 正文.html)" \
   --title "标题（≤64字）" --author "作者（≤8字）" --summary "一句话摘要" \
   --cover-image cover.jpg --timeout 240
 ```
 
 **标题、作者、摘要、封面四个字段一个都不能省**，封面自己生成，不要回头问用户要图。
 
-**⛔ 正文必须先过 `md2plain.py`**。直接塞 Markdown，草稿里满是 `##` 和 `>`。它去掉 frontmatter/引用/粗体/链接，二级标题转成「一、二、三、」独立行。
+**正文走 `md2wechat.py` 转内联样式 HTML**（公众号不认 `<style>` 和 class，只认元素上的 `style=`）。补丁里的 `fillContent` 从 Vue 组件树捞出 ProseMirror 的 `__editorView`，用它自己的 `domParser.parseSlice` + `tr.replaceSelection` 写入，排版能保住。捞不到 editorView 时补丁直接报错（`formatting lost`），不会静默降级成纯文本。`md2plain.py` 只在要纯文本时用。
 
 **封面上传**：`create-draft.js` 原版走 `setFileInput`，必报 `fileChooserOpened` 超时。补丁改成 DataTransfer 直塞。
 - 输出里的 `(with cover)` 只要传了参数就会打印，**不代表封面设上了**。以 `opencli weixin drafts` 里新草稿**没有**「图文内容不完整 请补充封面图」为准。
@@ -205,9 +205,9 @@ opencli weixin create-draft "$(cat 正文.txt)" \
 
 ⚠️ 公众号网页登录态短命，`create-draft` 前先 `preflight.py --platform weixin --deep`；失效时 `--repair` 会开好登录页，扫码登录即可。
 
-⛔ **别把 Markdown 直接塞进 `create-draft`**：后台编辑器是 ProseMirror，只认富文本，`**加粗**` 会原样显示成星号。事后也没法用脚本补救，改 DOM / execCommand / 点工具栏 / 合成 paste 事件全部无效。**要么正文本来就是纯文本，要么走下面的 API 路线。**
+⛔ **别把 Markdown 原文直接塞进 `create-draft`**：编辑器是 ProseMirror，`**加粗**` 会原样显示成星号，必须先转 HTML。改 DOM / execCommand / 点工具栏 / 合成 paste 事件这些「绕过 ProseMirror」的写法都无效，但走它自己的事务 API 可以（见上）。
 
-**要排版就走 `cgi-bin/draft/add` 官方 API**（个人订阅号可用、无需认证）。`content` 字段支持 HTML 标签，必须少于 2 万字符，图片 URL 必须来自「上传图文消息内的图片获取 URL」接口。流程：Markdown → **内联样式** HTML（不认 `<style>` 和 class）→ `draft/add`。需 AppID+AppSecret，出口 IP 要加白名单。
+**备选：`cgi-bin/draft/add` 官方 API**（编辑器路线失效时再考虑；个人订阅号可用、无需认证）。`content` 字段支持 HTML 标签，必须少于 2 万字符，图片 URL 必须来自「上传图文消息内的图片获取 URL」接口。流程：`md2wechat.py` 出的 HTML → `draft/add`。需 AppID+AppSecret，出口 IP 要加白名单。
 
 ## X / Twitter：拆 Thread 可用（见 `x_thread/publish_thread.py`）
 

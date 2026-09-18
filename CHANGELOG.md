@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-18.5 📦
+- **公众号排版失败不再静默**：`create-draft.js` 补丁在输入为 HTML、却因捞不到 ProseMirror `editorView` 降级成纯文本插入时直接报错（`formatting lost`），`mp_draft.py` 随之报 ❌，不再显示"草稿已建"。
+- **`md2wechat.py` 补齐常见语法**：一级标题、表格、分割线、斜体；正文先做 HTML 转义，`a<b` 这类字符不会再弄坏结构。
+- **`mp_draft.py`**：去掉针对旧纯文本路线的 Markdown 残留检查；正文含 Markdown 图片时直接报错（本机图片进不了公众号正文）；`--theme` 选项改为从主题表读取，`neo-brutalism` 可用（`publish_all.py` 同步）。
+- **SKILL.md**：公众号一节改为现行富文本路线；旧的"脚本改不动排版，只能走 draft/add API"结论收窄为"绕过 ProseMirror 的写法无效"，API 降为备选。
+- 同步本机已有的小修：`preflight.py` 公众号空草稿箱不再误判失败；`xhs_note.py` 自动清外链、强制带文字卡；`publish.py` 移除已停用的旧 X 拆分代码。
+
 ## 2026-09-18.4 📦
 - **新增新粗野主义（Neo-Brutalism）主题并统一全系 1px 细线**：
   - 从 TypeZen 逆向提取并封装 `neo-brutalism` 主题：支持 `3px` 纯黑高对比度外框、`5px` 零模糊硬投影、暖橙高光强调块，适合硬核技术复盘与立场鲜明的深度随笔。

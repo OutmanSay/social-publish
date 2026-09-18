@@ -18,7 +18,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from md2plain import convert  # noqa: E402
-from md2wechat import md_to_wechat_html  # noqa: E402
+from md2wechat import THEMES, md_to_wechat_html  # noqa: E402
 
 from apply_patches import opencli_root  # noqa: E402
 
@@ -62,7 +62,7 @@ def main():
     ap.add_argument("--summary", required=True)
     ap.add_argument("--cover", required=True)
     ap.add_argument("--author", default=os.environ.get("MP_AUTHOR", ""))
-    ap.add_argument("--theme", default="minimal-green", choices=["minimal-green", "latepost", "medium", "apple"], help="排版主题")
+    ap.add_argument("--theme", default="minimal-green", choices=list(THEMES), help="排版主题")
     ap.add_argument("--execute", action="store_true")
     a = ap.parse_args()
 
@@ -76,20 +76,21 @@ def main():
     if not cover.exists():
         die(f"封面不存在：{cover}（先用 gpt-image-2.5-sunburst 生成，不许省略封面）")
 
-    text = convert(Path(a.markdown).expanduser().read_text(encoding="utf-8"))
-    residue = [l for l in text.splitlines() if re.search(r"^#|^>|\*\*|\]\(", l)]
-    if residue:
-        die("纯文本仍有 Markdown 残留：\n" + "\n".join(residue[:5]))
+    raw_md = Path(a.markdown).expanduser().read_text(encoding="utf-8")
+    if re.search(r"!\[[^\]]*\]\(", raw_md):
+        die("正文含 Markdown 图片：本机图片进不了公众号正文（要先走微信上传接口），先删掉或改成文字")
+    rich_html = md_to_wechat_html(raw_md, theme_name=a.theme)
+    text = convert(raw_md)  # 只用于预览
 
     work = Path(tempfile.mkdtemp(prefix="mp_draft_"))
-    body = work / "body.txt"
-    body.write_text(text, encoding="utf-8")
+    body = work / "body.html"
+    body.write_text(rich_html, encoding="utf-8")
     jpg = work / "cover.jpg"
     r = run(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "65", "-Z", "1200", str(cover), "--out", str(jpg)], 60)
     if r.returncode != 0:
         die(f"封面压缩失败：{r.stderr.strip()[:200]}")
 
-    print(f"正文 {len(text)} 字 → {body}\n封面 {jpg.stat().st_size // 1024}KB → {jpg}")
+    print(f"正文 {len(text)} 字，HTML {len(rich_html)} 字符（主题 {a.theme}）→ {body}\n封面 {jpg.stat().st_size // 1024}KB → {jpg}")
     print("---- 正文前 6 行 ----\n" + "\n".join(text.splitlines()[:6]))
     if not a.execute:
         print("\n（预演结束，未建草稿。确认后加 --execute）")
@@ -102,8 +103,6 @@ def main():
 
     norm = lambda s: re.sub(r"\\([_*\\#])", r"\1", s).strip(' "\'')
     before = {(norm(d["Title"]), d["Time"]) for d in drafts()}
-    raw_md = Path(a.markdown).expanduser().read_text(encoding="utf-8")
-    rich_html = md_to_wechat_html(raw_md, theme_name=a.theme)
     r = run(["opencli", "weixin", "create-draft", rich_html, "--title", a.title, "--author", a.author,
              "--summary", a.summary, "--cover-image", str(jpg), "--timeout", "240", "--trace", "retain-on-failure", "-f", "json"], 300)
     if r.returncode != 0:

@@ -100,6 +100,20 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
     list_items = []
     list_ordered = False
 
+    table_rows = []
+
+    def flush_table():
+        nonlocal table_rows
+        if not table_rows:
+            return
+        cell = "border: 1px solid #e5e7eb; padding: 6px 10px; font-size: 14px; color: %s;" % theme["text"]
+        trs = []
+        for idx, row in enumerate(table_rows):
+            tag = "th" if idx == 0 else "td"
+            trs.append("<tr>%s</tr>" % "".join('<%s style="%s">%s</%s>' % (tag, cell, parse_inline(c), tag) for c in row))
+        html_blocks.append('<table style="border-collapse: collapse; margin: 16px 0; width: 100%%;">%s</table>' % "".join(trs))
+        table_rows = []
+
     def flush_list():
         nonlocal in_list, list_items, list_ordered
         if not in_list:
@@ -133,10 +147,12 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
         quote_lines = []
 
     def parse_inline(text: str) -> str:
+        text = html.escape(text, quote=False)
         text = re.sub(r"`([^`]+)`", r'<code style="background: %s; color: %s; padding: 2px 6px; border-radius: 4px; font-size: 13.5px; font-family: Menlo, Monaco, monospace;">\1</code>' % (theme["code_bg"], theme["code_color"]), text)
         default_strong = '<strong style="color: %s; font-weight: bold;">\\1</strong>' % theme["text"]
         strong_tmpl = f'<strong style="{theme["strong_style"]}">\\1</strong>' if "strong_style" in theme else default_strong
         text = re.sub(r"\*\*([^*]+)\*\*", strong_tmpl, text)
+        text = re.sub(r"(?<![*\w])\*(?=\S)([^*\n]+?)(?<=\S)\*(?!\*)", r"<em>\1</em>", text)
         text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r'<a href="\2" style="color: %s; text-decoration: underline;">\1</a>' % theme["primary"], text)
         return text
 
@@ -168,6 +184,26 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
 
         if in_code_block:
             code_lines.append(line)
+            i += 1
+            continue
+
+        # 表格
+        if stripped.startswith("|") and stripped.endswith("|"):
+            flush_list()
+            flush_quote()
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if not all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
+                table_rows.append(cells)
+            i += 1
+            continue
+        elif table_rows:
+            flush_table()
+
+        # 分割线
+        if re.fullmatch(r"(-{3,}|\*{3,}|_{3,})", stripped):
+            flush_list()
+            flush_quote()
+            html_blocks.append('<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 28px 0;">')
             i += 1
             continue
 
@@ -204,7 +240,11 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
             flush_list()
 
         # 标题
-        if stripped.startswith("## "):
+        if stripped.startswith("# "):
+            html_blocks.append('<h2 style="%s">%s</h2>' % (theme["h2_style"], parse_inline(stripped[2:].strip())))
+            i += 1
+            continue
+        elif stripped.startswith("## "):
             html_blocks.append('<h2 style="%s">%s</h2>' % (theme["h2_style"], parse_inline(stripped[3:].strip())))
             i += 1
             continue
@@ -225,6 +265,7 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
 
     flush_list()
     flush_quote()
+    flush_table()
 
     container_style = (
         "font-family: %s; padding: 0 4px; box-sizing: border-box;"

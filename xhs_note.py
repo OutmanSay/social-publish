@@ -77,11 +77,16 @@ def main():
         die(f"封面不存在：{cover}（先用 gpt-image-2.5-sunburst 生成，不许省略封面）")
 
     body = convert(Path(a.markdown).expanduser().read_text(encoding="utf-8")).strip()
+    # 自动清除引流外链与尾部引导语（小红书禁带外链）
+    body = re.sub(r"https?://[^\s]+", "", body).strip()
+    body = re.sub(r"(完整[^\n]*：?\s*$)|(阅读原文[^\n]*$)", "", body).strip()
     if len(body) > MAX_BODY:
         die(f"正文 {len(body)} 字，超过小红书 {MAX_BODY} 字上限。改写成精简版 .md 再跑，别硬截断")
     if re.search(r"^#|^>|\*\*|\]\(", body, re.M):
         die("正文仍有 Markdown 残留")
     cards = [c.strip() for c in a.cards.split("|||") if c.strip()]
+    if not cards:
+        die("小红书铁律：必须提供 --cards 渲染 2~3 张本地文字卡，禁止只发单图封面")
 
     work = Path(tempfile.mkdtemp(prefix="xhs_"))
     jpg = work / "cover.jpg"

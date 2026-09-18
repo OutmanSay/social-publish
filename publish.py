@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -15,53 +14,8 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 OPENCLI = shutil.which("opencli") or os.path.expanduser("~/.local/bin/opencli")
 PYTHON = sys.executable
-STATUS_URL = re.compile(r"https://x\.com/[^\s/]+/status/\d+")
 TWITTER_DISABLED_ERROR = """❌ publish.py 的 X 直发路径已停用（两处 --window background + split_for_x 用 \\n\\n 拼段落，与 X 的 insertText 注入能力冲突，必然失败）。
 请用 x_thread/publish_thread.py —— 用法见 SKILL.md「X thread 发布」节。"""
-
-
-def weighted_length(text: str) -> int:
-    return sum(1 if ord(char) < 0x1100 else 2 for char in text)
-
-
-def hard_split(text: str, limit: int) -> list[str]:
-    parts, current, weight = [], [], 0
-    for char in text:
-        char_weight = 1 if ord(char) < 0x1100 else 2
-        if current and weight + char_weight > limit:
-            parts.append("".join(current).strip())
-            current, weight = [], 0
-        current.append(char)
-        weight += char_weight
-    if current:
-        parts.append("".join(current).strip())
-    return [part for part in parts if part]
-
-
-def split_for_x(text: str, limit: int = 260) -> list[str]:
-    """已停用的旧 X 拆分逻辑；保留用于回退和后续重构，不再从 main() 调用。"""
-    if weighted_length(text) <= limit:
-        return [text.strip()]
-    chunks = re.split(r"(?<=[。！？!?；;])|\n{2,}", text.strip())
-    parts, current = [], ""
-    for raw in chunks:
-        chunk = raw.strip()
-        if not chunk:
-            continue
-        candidate = f"{current}\n\n{chunk}" if current else chunk
-        if weighted_length(candidate) <= limit:
-            current = candidate
-            continue
-        if current:
-            parts.append(current)
-            current = ""
-        if weighted_length(chunk) <= limit:
-            current = chunk
-        else:
-            parts.extend(hard_split(chunk, limit))
-    if current:
-        parts.append(current)
-    return parts
 
 
 def run(command: list[str], timeout: int = 60) -> tuple[int, str]:
@@ -100,24 +54,6 @@ def preflight(platforms: list[str]) -> tuple[int, str]:
     for platform in platforms:
         command.extend(["--platform", platform])
     return run(command, timeout=120)
-
-
-def retryable_composer_failure(output: str) -> bool:
-    value = output.lower()
-    return "selector not found" in value or "composer text area" in value
-
-
-def twitter_command(command: list[str]) -> tuple[int, str]:
-    """已停用的旧 X 命令包装；保留用于回退，不再从 main() 调用。"""
-    # opencli 默认 60s 命令上限对 post 不够用(2026-09-13 实测:帖子已发出、命令仍报 TIMEOUT,
-    # 上层会误判为失败)。post 没有 --timeout 参数,只能走这个全局环境变量。
-    os.environ["OPENCLI_BROWSER_COMMAND_TIMEOUT"] = "180"
-    returncode, output = run(command, timeout=210)
-    if not command_succeeded(returncode, output) and retryable_composer_failure(output):
-        # Safe to retry: these failures happen before text insertion / Post click.
-        run([PYTHON, os.path.join(ROOT, "preflight.py"), "--platform", "twitter", "--repair", "--deep"], timeout=90)
-        returncode, output = run(command, timeout=210)
-    return returncode, output
 
 
 def shrink_images(images: list[str]) -> list[str]:
@@ -197,36 +133,6 @@ def publish_baijiahao(text: str, images: list[str], title: str = "", execute: bo
     except Exception:
         pass
     return {"ok": command_succeeded(returncode, output), "output": output}
-
-
-def publish_twitter(text: str) -> dict:
-    """已停用的旧 X 直发路径；保留代码供未来修复，禁止从 main() 调用。
-
-    停用原因：这里使用 background 窗口，且 split_for_x() 会用双换行拼段落，
-    与当前 X 的 insertText 注入能力冲突。可用实现是 x_thread/publish_thread.py。
-    """
-    # 用 persistent 会话复用同一窗口发 Thread(解决 2026-08-12:ephemeral 每条一窗,
-    # 关窗触发 x.com beforeunload 弹窗,对话框无人应答使 opencli 命令挂起,驱动发布的模型卡死)。
-    # 全部发完后窗口保留为后台 tab,下次发布直接复用;不要手动 close,关窗仍可能触发弹窗。
-    parts = split_for_x(text)
-    outputs, parent_url = [], None
-    for index, part in enumerate(parts):
-        if index == 0:
-            command = [OPENCLI, "twitter", "post", part, "-f", "json", "--window", "background",
-                       "--site-session", "persistent", "--keep-tab", "true"]
-        else:
-            if not parent_url:
-                return {"ok": False, "parts": parts, "outputs": outputs, "error": "First X post returned no status URL; stopped to avoid an unthreaded duplicate."}
-            command = [OPENCLI, "twitter", "reply", parent_url, part, "-f", "json", "--window", "background",
-                       "--site-session", "persistent", "--keep-tab", "true"]
-        returncode, output = twitter_command(command)
-        outputs.append(output)
-        if not command_succeeded(returncode, output):
-            return {"ok": False, "parts": parts, "outputs": outputs, "error": f"X part {index + 1} failed"}
-        urls = STATUS_URL.findall(output)
-        if urls:
-            parent_url = urls[-1]
-    return {"ok": True, "parts": parts, "outputs": outputs, "url": parent_url}
 
 
 def main() -> int:
