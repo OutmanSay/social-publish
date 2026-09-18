@@ -15,7 +15,7 @@ THEMES = {
         "code_color": "#0969da",
         "pre_bg": "#24292e",
         "pre_color": "#e1e4e8",
-        "h2_style": "margin: 32px 0 16px 0; font-size: 18px; font-weight: bold; color: #111827; border-bottom: 2px solid #07c160; padding-bottom: 6px; display: table;",
+        "h2_style": "margin: 32px 0 16px 0; font-size: 18px; font-weight: bold; color: #111827; border-bottom: 1px solid #07c160; padding-bottom: 6px; display: table;",
         "h3_style": "margin: 24px 0 12px 0; font-size: 16.5px; font-weight: bold; color: #1f2937; border-left: 3px solid #07c160; padding-left: 10px;",
         "font_family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;",
     },
@@ -29,7 +29,7 @@ THEMES = {
         "code_color": "#d32f2f",
         "pre_bg": "#2a2a2a",
         "pre_color": "#f5f5f5",
-        "h2_style": "margin: 32px 0 16px 0; font-size: 18.5px; font-weight: 700; color: #1a1a1a; border-bottom: 2px solid #d32f2f; padding-bottom: 6px; display: table;",
+        "h2_style": "margin: 32px 0 16px 0; font-size: 18.5px; font-weight: 700; color: #1a1a1a; border-bottom: 1px solid #d32f2f; padding-bottom: 6px; display: table;",
         "h3_style": "margin: 24px 0 12px 0; font-size: 16.5px; font-weight: 700; color: #d32f2f; border-left: 4px solid #d32f2f; padding-left: 10px;",
         "font_family": "-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;",
     },
@@ -57,9 +57,25 @@ THEMES = {
         "code_color": "#0071e3",
         "pre_bg": "#1d1d1f",
         "pre_color": "#f5f5f7",
-        "h2_style": "margin: 34px 0 16px 0; font-size: 18.5px; font-weight: 600; color: #1d1d1f; border-bottom: 2px solid #0071e3; padding-bottom: 6px; display: table;",
+        "h2_style": "margin: 34px 0 16px 0; font-size: 18.5px; font-weight: 600; color: #1d1d1f; border-bottom: 1px solid #0071e3; padding-bottom: 6px; display: table;",
         "h3_style": "margin: 24px 0 12px 0; font-size: 16.5px; font-weight: 600; color: #1d1d1f; border-left: 3px solid #0071e3; padding-left: 10px;",
         "font_family": "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;",
+    },
+    "neo-brutalism": {
+        "name": "新粗野风（波普硬朗黑框）",
+        "primary": "#f59e0b",
+        "text": "#000000",
+        "muted_text": "#111111",
+        "border_quote": "#000000",
+        "code_bg": "#ffffff",
+        "code_color": "#000000",
+        "pre_bg": "#ffffff",
+        "pre_color": "#000000",
+        "h2_style": "margin: 28px 0 16px; font-size: 17px; font-weight: 800; color: #000000; background-color: #f59e0b; border: 3px solid #000000; padding: 6px 14px; box-shadow: 4px 4px 0px #000000; display: inline-block; line-height: 1.2;",
+        "h3_style": "margin: 24px 0 12px; font-size: 15.5px; font-weight: 800; color: #000000; border-left: 5px solid #f59e0b; padding-left: 10px;",
+        "quote_style": "border: 3px solid #000000; margin: 24px 0; padding: 14px 16px; color: #000000; background-color: rgba(245, 158, 11, 0.12); box-shadow: 5px 5px 0px #000000; line-height: 1.8;",
+        "strong_style": "font-weight: 800; background-color: #f59e0b; color: #000000; padding: 0 4px; border: 2px solid #000000;",
+        "font_family": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
     }
 }
 
@@ -99,11 +115,11 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
         nonlocal in_quote, quote_lines
         if not in_quote:
             return
-        # 极简无框纯净版：左侧严格 100% 垂直对齐，去除任何首行悬挂空格
-        style = (
+        default_style = (
             "margin: 20px 0; padding: 2px 0 2px 12px; border-left: 3px solid %s; "
             "color: %s; font-size: 15px; line-height: 1.8;"
         ) % (theme["border_quote"], theme["muted_text"])
+        style = theme.get("quote_style", default_style)
         lines_clean = [l.strip() for l in quote_lines if l.strip()]
         paras = "".join(
             '<p style="margin: 0 0 %spx 0; padding: 0; text-indent: 0;">%s</p>' % (
@@ -118,7 +134,9 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
 
     def parse_inline(text: str) -> str:
         text = re.sub(r"`([^`]+)`", r'<code style="background: %s; color: %s; padding: 2px 6px; border-radius: 4px; font-size: 13.5px; font-family: Menlo, Monaco, monospace;">\1</code>' % (theme["code_bg"], theme["code_color"]), text)
-        text = re.sub(r"\*\*([^*]+)\*\*", r'<strong style="color: %s; font-weight: bold;">\1</strong>' % theme["text"], text)
+        default_strong = '<strong style="color: %s; font-weight: bold;">\\1</strong>' % theme["text"]
+        strong_tmpl = f'<strong style="{theme["strong_style"]}">\\1</strong>' if "strong_style" in theme else default_strong
+        text = re.sub(r"\*\*([^*]+)\*\*", strong_tmpl, text)
         text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r'<a href="\2" style="color: %s; text-decoration: underline;">\1</a>' % theme["primary"], text)
         return text
 
