@@ -69,7 +69,7 @@ python3 <SKILL_DIR>/bjh_post.py 文章.md \
   --title "文章标题" --cover 封面.jpg [--draft|--execute]
 
 # ⭐ 公众号草稿：只许用这一条，禁止手拼 opencli weixin create-draft
-# 自动做：Markdown→内联样式富文本（md2wechat.py，--theme 可选 minimal-green/latepost/medium/apple/neo-brutalism，默认 minimal-green；支持标题/列表/引用/代码/表格/分割线，正文含 Markdown 图片会直接报错）、压封面、补丁自检、登录检查、验封面真设上；任一步失败非零退出
+# 自动做：Markdown→内联样式富文本（md2wechat.py，--theme 可选 minimal-green/latepost/medium/apple/neo-brutalism，默认 minimal-green；支持标题/列表/引用/代码/表格/分割线；正文用了 `#` 时所有标题整体降一级；正文含 Markdown 图片会直接报错）、压封面、补丁自检、登录检查、验封面真设上；任一步失败非零退出
 python3 <SKILL_DIR>/mp_draft.py 文章.md \
   --title "标题" --summary "一句话摘要" --cover 封面.png --author "作者"   # 预演
 #   ...确认后同一条命令加 --execute。--author 也可用环境变量 MP_AUTHOR

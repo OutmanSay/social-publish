@@ -87,6 +87,15 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
     md_text = re.sub(r"^---\n.*?\n---\n+", "", md_text, flags=re.DOTALL)
 
     lines = md_text.splitlines()
+    in_fence = False
+    has_h1 = False
+    for l in lines:
+        if l.strip().startswith("```"):
+            in_fence = not in_fence
+        elif not in_fence and re.match(r"^#\s+", l.strip()):
+            has_h1 = True
+            break
+    shift = 1 if has_h1 else 0
     html_blocks = []
 
     in_code_block = False
@@ -239,17 +248,18 @@ def md_to_wechat_html(md_text: str, theme_name: str = DEFAULT_THEME) -> str:
         elif in_list:
             flush_list()
 
-        # 标题
-        if stripped.startswith("# "):
-            html_blocks.append('<h2 style="%s">%s</h2>' % (theme["h2_style"], parse_inline(stripped[2:].strip())))
-            i += 1
-            continue
-        elif stripped.startswith("## "):
-            html_blocks.append('<h2 style="%s">%s</h2>' % (theme["h2_style"], parse_inline(stripped[3:].strip())))
-            i += 1
-            continue
-        elif stripped.startswith("### "):
-            html_blocks.append('<h3 style="%s">%s</h3>' % (theme["h3_style"], parse_inline(stripped[4:].strip())))
+        # 标题：文章标题在草稿「标题」栏，正文最高只到 h2；用了 # 的文章整体降一级，保住层级
+        m_h = re.match(r"^(#{1,4})\s+(.*)$", stripped)
+        if m_h:
+            flush_list()
+            level = len(m_h.group(1)) + shift
+            text = parse_inline(m_h.group(2).strip())
+            if level <= 2:
+                html_blocks.append('<h2 style="%s">%s</h2>' % (theme["h2_style"], text))
+            elif level == 3:
+                html_blocks.append('<h3 style="%s">%s</h3>' % (theme["h3_style"], text))
+            else:
+                html_blocks.append('<h4 style="margin: 20px 0 10px 0; font-size: 15.5px; font-weight: bold; color: %s;">%s</h4>' % (theme["text"], text))
             i += 1
             continue
 
