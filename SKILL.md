@@ -33,6 +33,11 @@ metadata:
 所有 Agent 都应调用这里的确定性脚本，不要自行拼接 `open -a Chrome` 或直接操控页面。
 
 ```bash
+# ⭐ 全平台一键并发发布（7 平台受控流水线，轻重分流，30-45s）：
+# 默认只预演；加 --execute 才真正发布
+python3 <SKILL_DIR>/publish_all.py 文章.md \
+  --cover 封面.png [--title "标题"] [--summary "摘要"] [--execute]
+
 # 默认检查微博、X、即刻；只读，不发布
 python3 <SKILL_DIR>/preflight.py --repair --deep
 
