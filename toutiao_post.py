@@ -72,12 +72,18 @@ def post_article(title: str, text: str, cover_path: Path, execute: bool = False)
         print("\n（预演结束，未碰页面。真发布加 --execute）")
         return {"ok": True, "dry_run": True}
 
-    with open(cover_path, "rb") as f:
+    import tempfile
+    with tempfile.NamedTemporaryFile("w+b", suffix=".jpg", delete=False) as tf:
+        shrunk_cover = tf.name
+    r = run_cmd(["sips", "-s", "format", "jpeg", "-s", "formatOptions", "60", "-Z", "1200", str(cover_path), "--out", shrunk_cover], 60)
+    actual_cover = shrunk_cover if r.returncode == 0 and os.path.exists(shrunk_cover) else cover_path
+
+    with open(actual_cover, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("ascii")
 
     session = "social-toutiao"
     print("[*] 打开头条号后台...")
-    r = run_cmd(["opencli", "browser", session, "open", "https://mp.toutiao.com/profile_v4/graphic/publish", "--window", "background"], 40)
+    r = run_cmd(["opencli", "browser", session, "open", "https://mp.toutiao.com/profile_v4/graphic/publish", "--window", "foreground"], 40)
     if r.returncode != 0:
         die(f"无法打开头条号创作页面：{r.stderr or r.stdout}")
     time.sleep(4)
@@ -125,7 +131,7 @@ def post_article(title: str, text: str, cover_path: Path, execute: bool = False)
     if isinstance(res, dict) and not res.get("ok"):
         run_cmd(["opencli", "browser", session, "close"], 15)
         die(f"内容注入失败：{res.get('error')}")
-    time.sleep(5)
+    time.sleep(8)
 
     # 选项设置（单图封面 + 开启广告分成）
     js_options = """

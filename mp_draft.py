@@ -18,6 +18,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from md2plain import convert  # noqa: E402
+from md2wechat import md_to_wechat_html  # noqa: E402
 
 from apply_patches import opencli_root  # noqa: E402
 
@@ -36,8 +37,10 @@ def run(cmd, timeout=300):
 
 
 def drafts():
-    r = run(["opencli", "weixin", "drafts", "-f", "json"], 120)
+    r = run(["opencli", "weixin", "drafts", "-f", "json", "--trace", "retain-on-failure"], 120)
     if r.returncode != 0:
+        if "EMPTY_RESULT" in (r.stdout + r.stderr):
+            return []
         die(f"读取草稿箱失败：{r.stderr.strip()[:300]}")
     return json.loads(r.stdout)
 
@@ -96,21 +99,24 @@ def main():
     if r.returncode != 0:
         die("公众号登录态失效，先跑 preflight.py --platform weixin --repair --deep")
 
-    before = {(d["Title"], d["Time"]) for d in drafts()}
-    r = run(["opencli", "weixin", "create-draft", text, "--title", a.title, "--author", a.author,
-             "--summary", a.summary, "--cover-image", str(jpg), "--timeout", "240", "-f", "json"], 300)
+    norm = lambda s: re.sub(r"\\([_*\\#])", r"\1", s).strip(' "\'')
+    before = {(norm(d["Title"]), d["Time"]) for d in drafts()}
+    raw_md = Path(a.markdown).expanduser().read_text(encoding="utf-8")
+    rich_html = md_to_wechat_html(raw_md)
+    r = run(["opencli", "weixin", "create-draft", rich_html, "--title", a.title, "--author", a.author,
+             "--summary", a.summary, "--cover-image", str(jpg), "--timeout", "240", "--trace", "retain-on-failure", "-f", "json"], 300)
     if r.returncode != 0:
         die(f"create-draft 失败（不许去掉封面重试）：{(r.stderr or r.stdout).strip()[:400]}")
 
     after = drafts()
-    new = [d for d in after if d["Title"] == a.title and (d["Title"], d["Time"]) not in before]
+    new = [d for d in after if norm(d["Title"]) == a.title and (norm(d["Title"]), d["Time"]) not in before]
     if not new:
         die("草稿箱里没找到新草稿，保存可能没成功，去后台确认，别重复建")
     if INCOMPLETE in new[0]["Time"]:
         die(f"草稿已建但封面没设上（{new[0]['Time']}），不许报告成功")
 
     print(f"\n✅ 草稿已建，封面已设：{a.title}（{new[0]['Time']}）")
-    old = [d["Time"] for d in after if d["Title"] == a.title and d is not new[0]]
+    old = [d["Time"] for d in after if norm(d["Title"]) == a.title and d is not new[0]]
     if old:
         print("⚠️ 草稿箱还有同名旧稿，请手动删除：" + "；".join(old))
     print("下一步：提醒用手机「公众号助手」App 点发表。")

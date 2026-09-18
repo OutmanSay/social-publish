@@ -71,7 +71,7 @@ def post_article(title: str, text: str, cover_path: Path, draft_only: bool = Fal
 
     session = "social-baijiahao"
     print("[*] 打开百家号后台...")
-    r = run_cmd(["opencli", "browser", session, "open", "https://baijiahao.baidu.com/builder/rc/edit?type=news", "--window", "background"], 40)
+    r = run_cmd(["opencli", "browser", session, "open", "https://baijiahao.baidu.com/builder/rc/edit?type=news", "--window", "foreground"], 40)
     if r.returncode != 0:
         die(f"无法打开百家号编辑页面：{r.stderr or r.stdout}")
     time.sleep(4)

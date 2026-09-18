@@ -164,6 +164,25 @@ def main():
         i += 1
     if not parts:
         print("❌ /tmp/xthread/part*.txt 不存在"); return 2
+
+    # ⭐ 发之前校验：每条必须单段落、且不超 280 加权字符。
+    # 理由（2026-09-14 实测）：execCommand('insertText') 会吞掉换行，带换行的内容
+    # 要么注入后校验失败，要么发出残缺文本；超 280 会被 X 拒绝或截断。
+    # 早先只在 docstring 里写了这条约束，代码不校验 —— 现在补上，避免带病发布。
+    bad = False
+    for n, text in enumerate(parts, 1):
+        if "\n" in text:
+            print(f"❌ part{n}.txt 含换行 —— 每条必须是单段落（insertText 会吞换行）")
+            bad = True
+        clean_text = re.sub(r'https?://\S+', 'x' * 23, text)
+        w = sum(2 if ord(c) > 0x2E80 else 1 for c in clean_text)  # URL按Twitter t.co 23字符算，中文按双宽
+        if w > 280:
+            print(f"❌ part{n}.txt 加权长度 {w} > 280")
+            bad = True
+    if bad:
+        print("⛔ 校验未通过，未发布任何内容。修好 /tmp/xthread/part*.txt 再跑。")
+        return 3
+
     print(f"[*] session={session}  共 {len(parts)} 条  从第 {start} 条开始  parent={parent_id or '(无)'}")
 
     for n in range(start, len(parts) + 1):

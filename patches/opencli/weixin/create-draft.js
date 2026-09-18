@@ -45,11 +45,37 @@ async function fillContent(page, text) {
         var editor = editors[editors.length - 1];
         if (!editor) return { ok: false, reason: 'content editor not found' };
         editor.focus();
+
+        var textContent = ${JSON.stringify(text)};
+        var isHtml = /<[a-z][\\s\\S]*>/i.test(textContent);
+
+        var v = editor.parentElement ? editor.parentElement.__vue__ : null;
+        var view = null;
+        while (v) {
+            if (v.__editorView) { view = v.__editorView; break; }
+            if (v.getView && typeof v.getView === 'function') {
+                try { view = v.getView(); if (view) break; } catch(e){}
+            }
+            v = v.$parent;
+        }
+
+        if (view && view.state && view.state.schema && view.state.schema.cached && view.state.schema.cached.domParser && isHtml) {
+            var parser = view.state.schema.cached.domParser;
+            var div = document.createElement('div');
+            div.innerHTML = textContent;
+            var tr = view.state.tr.delete(0, view.state.doc.content.size);
+            view.dispatch(tr);
+            var slice = parser.parseSlice(div);
+            var tr2 = view.state.tr.replaceSelection(slice);
+            view.dispatch(tr2);
+            return { ok: true, rich: true };
+        }
+
         if (editor.querySelector('[contenteditable="false"]')) editor.innerHTML = '';
         document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, ${JSON.stringify(text)});
+        document.execCommand('insertText', false, textContent);
         editor.dispatchEvent(new InputEvent('input', { bubbles: true }));
-        return { ok: true };
+        return { ok: true, rich: false };
     })()`);
 }
 

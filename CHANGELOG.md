@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-18.1 📦
+- **微信公众号草稿支持富文本自动排版**：
+  - 新增 `md2wechat.py`：自动将 Markdown 转换为带内联 CSS 样式的公众号专用 HTML（含品牌强调底纹卡片、标题底纹/边框、等宽代码标签、条目列表与移动端行间距优化）。
+  - 更新 opencli 补丁 `patches/opencli/weixin/create-draft.js`：打通微信官方 ProseMirror 编辑器的 `domParser.parseSlice` 原生注入接口，直接将样式节点注入底层 Schema，不再被微信抹平成纯文本，彻底免去手动去第三方网站排版粘贴。
+  - `mp_draft.py` 自动集成富文本转换，增加标题反斜杠转义归一化校验，草稿箱读取增加 `--trace retain-on-failure` 避免导航锁。
+- **头条号与百家号后台稳定性提升**：
+  - `toutiao_post.py`、`bjh_post.py` 改用 `--window foreground` 前台打开，避免 Chromium 后台标签页因资源回收变 `about:blank` 导致按钮定位超时。
+  - `x_thread/publish_thread.py` 优化 Twitter `t.co` URL 23 字符折算与加权字数统计。
+
 ## 2026-09-14.4 📦
 - **新增 X (Twitter) thread 发布**：`x_thread/publish_thread.py`。
   - X 免费号单条 280 字符，长文只能拆 thread；本脚本按 `in_reply_to` 串链。
